@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# author: Christian Engel <engel-ch@outlook.com>
+# --c191118
+# --u191118
+# desc: simplified start of executalbes, esp. shells, in pods
+#  The actuion kubectl command is composed out of the filename of this application, e.g.
+#  `k8exec` becomes to `kubectl exec` and `k8logs` becomes to `kubectl logs`
+
+_app=$(basename $0)
+_appDir=$(dirname $0)
+_absoluteAppDir=$(cd $_appDir; /bin/pwd)
+_appVersion="0.2.3" # semantic versioning
+
+# --- debug helpers
+
+debugSet()
+{
+    DebugFlag=TRUE
+    return 0
+}
+
+debugUnset()
+{
+    DebugFlag=FALSE
+    return 0
+}
+
+debug()
+{
+    test $DebugFlag"" = TRUE && echo 'DEBUG:' $* 1>&2
+    return 0
+}
+
+# --- Debug and error message handling
+
+# seMessage always show such a message.  If known terminal, print the message
+# in reverse video mode. This is the other way, not using escape sequences
+soMessage()
+{
+    if [ "$TERM" = xterm -o "$TERM" = vt100 -o "$TERM" = xterm-256color  -o "$TERM" = screen ] ; then
+        tput smso
+        /bin/echo $* 1>&2
+        tput rmso
+    else
+        /bin/echo $* 1>&2
+    fi
+}
+
+exitIfBinaryNotFound()
+{
+    for file in $@
+    do
+        [ $(command -v "$file") ] || errorExit 253 binary not found: $file
+    done
+}
+
+error()
+{
+    soMessage 'ERROR:'$*
+}
+
+errorExit()
+{
+    if [[ $# -lt 2 ]] ; then
+        error wrong call to to errorExit.
+        exit 222
+    fi
+    EXITCODE=$1 ; shift
+    error $* 1>&2
+    exit $EXITCODE
+}
+
+# --- temporary files and directories
+
+tempFile()
+# TMP1=$(tempFile)
+# TMP2=$(tempFile)
+# trap "rm -f $TMP1 $TMP2" EXIT
+{
+    tempprefix=$(basename "$0")
+    mktemp ${TMPDIR:-/tmp/}${tempprefix}.XXXXXXXX
+}
+
+# --- temporary directory
+
+tempDir()
+# TMPDIR=$(tempDir)
+# trap "rm -fr $TMPDIR;" EXIT
+{
+    mktemp -d "${TMPDIR:-/tmp/}$(basename $0).YYYYYYYYY"
+}
+
+# =========== begin of specific implementation
+# --- usage message
+
+usage()
+{
+    echo $_app > /dev/stderr
+    echo version: $_appVersion > /dev/stderr
+    echo synopsis: $_app [-dvhns] --shell '<shell>' > /dev/stderr
+    echo description: start a shell/command in a kubernetes pod > /dev/stderr
+    echo default shell is bash > /dev/stderr
+}
+
+# --- CLI parsing, did not work as expected when refactored to a function
+
+OPTS=`getopt -o Vdfs: --long version,debug,shell: -n 'parse-options' -- "$@"`
+
+[ $? != 0 ] && errorExit 1 "Failed parsing options."
+eval set -- "$OPTS"
+debug "done:command line parsing:$OPTS"
+
+# -- init variables
+
+# -- parsing CLI options
+while true; do
+    case "$1" in
+        -V | --version )      echo $_appVersion; exit 99 ;;
+        -d | --debug )        debugSet; shift ;;
+        -f )                  _tailfMode=1; shift ;; # only used in k8logs call
+        -h | --help )         usage; exit 127 ;;
+        -s | --shell )        CMD="$2"; shift; shift ;;
+        -- )                  shift; break ;; # signal eoOptions
+    esac
+done
+
+# --------- main
+debug args just from CLI are $*
+ARGS="$*"
+debug Argument is\: $ARGS
+
+[ "$ARGS" = "" ] && errorExit 2 No argument '<searchString>' supplied.
+_mathingLines=$(kubectl get po | grep -i $ARGS | wc -l)
+debug matching lines\: $_mathingLines
+
+# default init
+ExecOptions=
+ExecSuffix=
+# determine the kubectl sub-command by extracting the name from $0
+ExecCmd=$(echo $_app | sed 's/k8//')
+
+# further processing is only ok if we detected exactly one lines => one pod
+[ $_mathingLines -eq 0 ] && errorExit 3 pod not found.
+[ $_mathingLines -gt 1 ] && errorExit 4 more than one matching pod found.
+
+case "$ExecCmd" in
+exec)
+   ExecOptions="-it"
+   ExecSuffix=${CMD:-bash}
+   ;;
+logs)
+    [ "$_tailfMode" = 1 ] && ExecOptions="-f" ;;
+esac
+
+_pod=$(kubectl get po | grep -i "$ARGS" | cut -d ' ' -f 1)
+debug pod is $_pod
+exec kubectl $ExecCmd $ExecOptions $_pod $ExecSuffix
