@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+if [ $# -ne 2 ] ; then
+  echo either specify true or false > /dev/stderr
+  exit 1
+fi
+
+cluster=$1
+[ $2 = true ] && public=true && private=false
+[ $2 = false ] && public=false && private=true
+
+eksctl utils update-cluster-endpoints --cluster=$cluster --private-access=$private --public-access=$public --approve
+
