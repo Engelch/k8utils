@@ -9,7 +9,7 @@
 _app=$(basename $0)
 _appDir=$(dirname $0)
 _absoluteAppDir=$(cd $_appDir; /bin/pwd)
-_appVersion="0.2.3" # semantic versioning
+_appVersion="0.3.1" # semantic versioning
 
 # --- debug helpers
 
@@ -148,6 +148,8 @@ exec)
    ExecOptions="-it"
    ExecSuffix=${CMD:-bash}
    ;;
+desc|describe)
+    ExecCmd=describe
 logs)
     [ "$_tailfMode" = 1 ] && ExecOptions="-f" ;;
 esac
