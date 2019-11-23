@@ -9,7 +9,7 @@
 _app=$(basename $0)
 _appDir=$(dirname $0)
 _absoluteAppDir=$(cd $_appDir; /bin/pwd)
-_appVersion="0.3.1" # semantic versioning
+_appVersion="0.3.2" # semantic versioning
 
 # --- debug helpers
 
@@ -150,8 +150,10 @@ exec)
    ;;
 desc|describe)
     ExecCmd=describe
+    ;;
 logs)
-    [ "$_tailfMode" = 1 ] && ExecOptions="-f" ;;
+    [ "$_tailfMode" = 1 ] && ExecOptions="-f"
+    ;;
 esac
 
 _pod=$(kubectl get po | grep -i "$ARGS" | cut -d ' ' -f 1)
